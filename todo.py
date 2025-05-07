@@ -250,7 +250,7 @@ def build_display_list(tasks):
         else:
             section = group_task(idxs)
 
-        # determine display string
+        # determine display string and sort date
         if due_date:
             if due_date == tomorrow_date:
                 disp = "Tomorrow"
@@ -262,11 +262,22 @@ def build_display_list(tasks):
                 disp = f"{calendar.month_name[due_date.month]} {due_date.day}"
             sort_dt = due_date
         else:
-            # weekday(s) only
-            names = [calendar.day_name[i] for i in idxs]
-            disp = "/".join(names)
-            dates = [today_date + timedelta(days=(i - today_idx)) for i in idxs]
-            sort_dt = max(dates)
+            # Estimate next occurrence(s) of specified weekdays
+            future_dates = [
+                today_date + timedelta(days=(i - today_idx) % 7)
+                for i in idxs
+            ]
+            sort_dt = max(future_dates)
+            due_date = sort_dt  # treat it like a real due date from here
+            if due_date == tomorrow_date:
+                disp = "Tomorrow"
+            elif due_date == today_date:
+                disp = "Today"
+            elif due_date.isocalendar()[1] == today_date.isocalendar()[1]:
+                disp = calendar.day_name[due_date.weekday()]
+            else:
+                disp = f"{calendar.month_name[due_date.month]} {due_date.day}"
+
 
         buckets[section].append({
             'orig_idx': idx,
@@ -276,16 +287,16 @@ def build_display_list(tasks):
             'stat': stat,
             'sort': sort_dt
         })  
-    
-    # flatten in the order past -> today -> later with 7 day cutoff
+
+    # flatten in the order past → today → later, with sort descending
     cutoff = today_date - timedelta(days=7)
     buckets['past'] = [
         t for t in buckets['past']
         if t['stat'] == 'done' and t['sort'] >= cutoff
     ]
     display = []
-    for sec in ('past','today','later'):
-        lst = sorted(buckets[sec], key=lambda t: t['sort'], reverse=True)
+    for sec in ('past', 'today', 'later'):
+        lst = sorted(buckets[sec], key=lambda t: t['sort'])
         display.extend(lst)
     return display
 
